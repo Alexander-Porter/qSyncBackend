@@ -1,19 +1,33 @@
 import flask
 import flask_login
+import os
 from flask_sqlalchemy import SQLAlchemy
+from dotenv import load_dotenv
 
+load_dotenv() 
 app = flask.Flask(__name__)
-app.secret_key = "super secret string"  # Change this!
+app.secret_key = os.getenv("SECRET_KEY")  # 从.env文件读取
 
-# Configure the database
-app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql://syncUser:GWjBsdEQBaerdh3Z@localhost:3307/syncUser'
+# 使用环境变量配置数据库
+db_user = os.getenv("DB_USER")
+db_password = os.getenv("DB_PASSWORD")
+db_host = os.getenv("DB_HOST")
+db_port = os.getenv("DB_PORT")
+db_name = os.getenv("DB_NAME")
+db_backend = os.getenv("DB_BACKEND")
+
+
+if db_backend=="mysql":
+    db_backend="mysql+mysqlconnector"
+app.config['SQLALCHEMY_DATABASE_URI'] = f"{db_backend}://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+
 db = SQLAlchemy(app)
 
 login_manager = flask_login.LoginManager()
 login_manager.init_app(app)
 
 
-from werkzeug.security import generate_password_hash
+from werkzeug.security import generate_password_hash,check_password_hash
 
 #stand api response
 #{"code":200,"message":"success","data":{}}
@@ -26,9 +40,15 @@ class User(db.Model):
     avatar_url = db.Column(db.String(200))
     tasks = db.relationship('SyncTask', backref='user', lazy=True)
     devices = db.relationship('Device', backref='user', lazy=True)
-
+    is_active = db.Column(db.Boolean, default=True)
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
+    def get_id(self):
+        return self.id
+    def is_authenticated(self):
+        return True
 
 class Device(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -49,16 +69,17 @@ class SyncTask(db.Model):
 
 @login_manager.user_loader
 def user_loader(id):
-    return User.query.get(id)
+    return db.session.get(User, id)
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if flask.request.method == "POST":
         email = flask.request.form["email"]
         password = flask.request.form["password"]
-
-        user = User.query.filter_by(id=email).first()
-        if user and user.password == password:
+        print(email,password,generate_password_hash(password))
+        
+        user = User.query.filter_by(email=email).first()
+        if user and check_password_hash(user.password_hash,password):
             flask_login.login_user(user)
             return flask.redirect(flask.url_for("profile"))
         else:
@@ -83,7 +104,7 @@ def profile():
 
 @app.route("/register", methods=["POST"])
 def register():
-    step=flask.request.form["step"]
+    #step=flask.request.form["step"]
     username = flask.request.form["username"]
     email = flask.request.form["email"]
 

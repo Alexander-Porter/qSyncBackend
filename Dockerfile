@@ -2,6 +2,7 @@
 FROM python:3.10-slim
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
+ENV DB_BACKEND mysql
 # 设置工作目录
 WORKDIR /app
 # 将当前目录内容复制到位于/app中的容器中docker build -t myapp .

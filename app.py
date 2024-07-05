@@ -1,6 +1,7 @@
 import flask
 import flask_login
 import os
+import logging  # Add this line to import the logging module
 from flask_sqlalchemy import SQLAlchemy
 from dotenv import load_dotenv
 
@@ -11,23 +12,25 @@ app.secret_key = os.getenv("SECRET_KEY")  # 从.env文件读取
 # 使用环境变量配置数据库
 db_user = os.getenv("DB_USER")
 db_password = os.getenv("DB_PASSWORD")
-db_host = os.getenv("DB_HOST")
-db_port = os.getenv("DB_PORT")
 db_name = os.getenv("DB_NAME")
-db_backend = os.getenv("DB_BACKEND")
+db_host = os.getenv("DB_HOST")
+if db_host==None:
+    db_host="localhost"
+
+app.config['SQLALCHEMY_DATABASE_URI'] = f"mysql+mysqlconnector://root:{db_password}@mysql/{db_name}"
+logger = logging.getLogger(__name__)  # Add this line to define the logger object
 
 
-if db_backend=="mysql":
-    db_backend="mysql+mysqlconnector"
-app.config['SQLALCHEMY_DATABASE_URI'] = f"{db_backend}://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
 
-db = SQLAlchemy(app)
+
 
 login_manager = flask_login.LoginManager()
 login_manager.init_app(app)
+db = SQLAlchemy(app)
 
 
 from werkzeug.security import generate_password_hash,check_password_hash
+
 
 #stand api response
 #{"code":200,"message":"success","data":{}}
@@ -109,6 +112,9 @@ def register():
     email = flask.request.form["email"]
 
     password = flask.request.form["password"]
+    if User.query.filter_by(email=email).first():
+        #409
+        return flask.jsonify({"code": 409, "message": "Email already exists", "data": {}}), 409
     user = User(username=username, email=email)
     user.set_password(password)
     db.session.add(user)
@@ -151,5 +157,8 @@ def logout():
 with app.app_context():
     db.create_all()
 
+
+
 if __name__ == "__main__":
+    
     app.run(debug=True)

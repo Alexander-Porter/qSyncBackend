@@ -15,9 +15,11 @@ db_password = os.getenv("DB_PASSWORD")
 db_name = os.getenv("DB_NAME")
 db_host = os.getenv("DB_HOST")
 if db_host==None:
-    db_host="localhost"
+    db_host="mysql"
+if db_user==None:
+    db_user="root"
 
-app.config['SQLALCHEMY_DATABASE_URI'] = f"mysql+mysqlconnector://root:{db_password}@mysql/{db_name}"
+app.config['SQLALCHEMY_DATABASE_URI'] = f"mysql+mysqlconnector://{db_user}:{db_password}@{db_host}/{db_name}"
 logger = logging.getLogger(__name__)  # Add this line to define the logger object
 
 

@@ -1,7 +1,7 @@
 # 使用官方Python运行时作为父镜像
 FROM python:3.10-slim
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 # 设置工作目录
 WORKDIR /app
 # 将当前目录内容复制到位于/app中的容器中docker build -t myapp .

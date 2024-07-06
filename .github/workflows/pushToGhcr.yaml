@@ -1,7 +1,7 @@
 name: Build and Push Container to GitHub Container Registry
 
 on:
-  pull:
+  push:
     branches:
       - main
 

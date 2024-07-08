@@ -5,3 +5,5 @@ python-dotenv==1.0.1
 Werkzeug==3.0.3
 mysql-connector-python
 gunicorn
+qcloud-python-sts
+cos-python-sdk-v5

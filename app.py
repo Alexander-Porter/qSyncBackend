@@ -1,9 +1,12 @@
+import datetime
 import flask
 import flask_login
 import os
+import uuid
 import logging  # Add this line to import the logging module
 from flask_sqlalchemy import SQLAlchemy
 from dotenv import load_dotenv
+from s3Utils import S3Utils
 
 load_dotenv() 
 app = flask.Flask(__name__)
@@ -22,7 +25,7 @@ if db_user==None:
 app.config['SQLALCHEMY_DATABASE_URI'] = f"mysql+mysqlconnector://{db_user}:{db_password}@{db_host}/{db_name}"
 logger = logging.getLogger(__name__)  # Add this line to define the logger object
 
-
+myS3=S3Utils(os.getenv("S3_SECRET_ID"), os.getenv("S3_SECRET_KEY"), os.getenv("S3_BUCKET"), os.getenv("S3_REGION"))
 
 
 
@@ -34,12 +37,9 @@ db = SQLAlchemy(app)
 from werkzeug.security import generate_password_hash,check_password_hash
 
 
-#stand api response
-#{"code":200,"message":"success","data":{}}
-
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(100), unique=True, nullable=False)
+    username = db.Column(db.String(100), unique=False, nullable=False)
     email = db.Column(db.String(100), unique=True, nullable=False)
     password_hash = db.Column(db.String(200), nullable=False)
     avatar_url = db.Column(db.String(200))
@@ -95,16 +95,56 @@ def login():
         # Set status code to 405
         return flask.jsonify({"code": 405, "message": "Method Not Allowed", "data": {}}), 405
 
-@app.route("/info")
+@app.route("/info", methods=["GET"])
 @flask_login.login_required
 def profile():
     user=flask_login.current_user
+    avatarUrl=myS3.getPreSignUrl(user.avatar_url)
     data={
         "username":user.username,
         "email":user.email,
-        "avatar_url":user.avatar_url,
+        "avatar_url":avatarUrl,
         "tasks":[]
     }
+    return flask.jsonify({"code": 200, "message": "success", "data": data})
+
+@app.route("/updateInfo", methods=["POST"])
+@flask_login.login_required
+def updateInfo():
+    user=flask_login.current_user
+    username = flask.request.form["username"]
+    password = flask.request.form["password"]
+    user.username=username
+    user.set_password(password)
+    db.session.commit()
+    #200
+    return flask.jsonify({"code": 200, "message": "success", "data": {}})
+
+@app.route("/updateAvatar", methods=["POST"])
+@flask_login.login_required
+def updateAvatar():
+    #base64 encoded image
+    user=flask_login.current_user
+    avatar = flask.request.form["avatar"]
+    #save base64 encoded image to file
+    thisUUid=uuid.uuid1()
+    uuidStr=str(thisUUid)
+    with open(f"{uuidStr}.png", "wb") as f:
+        import base64
+        avatar=avatar.split(",")[1]
+        avatar = base64.b64decode(avatar)
+        f.write(avatar)
+    myS3.uploadObject(f"avatars/{uuidStr}.png",f"{uuidStr}.png")
+    user.avatar_url=f"avatars/{uuidStr}.png"
+    #删除
+    import os
+    os.remove(f"{uuidStr}.png")
+    db.session.commit()
+    avatarUrl=myS3.getPreSignUrl(user.avatar_url)
+    data={
+        "avatar_url":avatarUrl
+    }
+    #200
     return flask.jsonify({"code": 200, "message": "success", "data": data})
 
 @app.route("/register", methods=["POST"])
@@ -145,16 +185,165 @@ def getTasks():
             "s3Dir":task.s3Dir,
             "syncType":task.syncType,
             "usedSize":task.usedSize,
-            "totalSize":task.totalSize
+            "totalSize":task.totalSize,
+            "created_at":task.created_at,
+            "id":task.id
         })
     return flask.jsonify({"code": 200, "message": "success", "data": data})
 
+@app.route("/addTask",methods=["post"])
+@flask_login.login_required
+def addTask():
+    user=flask_login.current_user
+    localDir=flask.request.form["localDir"]
+    s3Dir=flask.request.form["s3Dir"]
+    syncType=flask.request.form["syncType"]
+    usedSize=flask.request.form["usedSize"]
+    totalSize=flask.request.form["totalSize"]
+    #判断数据库中S3目录是否被其他用户拥有过
+    tasks = SyncTask.query.filter(SyncTask.s3Dir == s3Dir, SyncTask.user_id != user.id).all()
+    if tasks:
+        # dir is already occupied by other users
+        return flask.jsonify({"code": 409, "message": "Directory already occupied", "data": {}}), 409
+    #否则，检查S3目录是否存在
+    if not myS3.isValidDir(s3Dir):
+        return flask.jsonify({"code": 403, "message": "Bad S3 Dir Name", "data": {}}), 403
+    if not myS3.isObjectExist(s3Dir):
+        try:
+            myS3.createDir(s3Dir)
+        except Exception as e:
+            return flask.jsonify({"code": 500, "message": e, "data": {}}), 500
+    created_at = datetime.datetime.now()
+    task = SyncTask(localDir=localDir, s3Dir=s3Dir, syncType=syncType, usedSize=usedSize, totalSize=totalSize, user_id=user.id, created_at=created_at)
+    db.session.add(task)
+    db.session.commit()
+    #get this task and return
+    task = SyncTask.query.filter_by(localDir=localDir, s3Dir=s3Dir, user_id=user.id).first()
+    data={
+        "localDir":task.localDir,
+        "s3Dir":task.s3Dir,
+        "syncType":task.syncType,
+        "usedSize":task.usedSize,
+        "totalSize":task.totalSize,
+        "created_at":task.created_at,
+        "id":task.id
+    }
+    #201
+    return flask.jsonify({"code": 201, "message": "success", "data": data}), 201
+
+@app.route("/deleteTask",methods=["get"])
+@flask_login.login_required
+def deleteTask():
+    user=flask_login.current_user
+    task_id=flask.request.args.get("task_id")
+    task=SyncTask.query.filter_by(id=task_id).first()
+    if task.user_id!=user.id:
+        return flask.jsonify({"code": 403, "message": "Permission Denied", "data": {}}), 403
+    db.session.delete(task)
+    db.session.commit()
+    #200
+    return flask.jsonify({"code": 200, "message": "success", "data": {}})
+
+@app.route("/getTaskToken",methods=["get"])
+@flask_login.login_required
+def getTaskToken():
+    user=flask_login.current_user
+    task_id=flask.request.args.get("task_id")
+    task=SyncTask.query.filter_by(id=task_id).first()
+    if task.user_id!=user.id:
+        return flask.jsonify({"code": 403, "message": "Permission Denied", "data": {}}), 403
+    allow_prefix=task.s3Dir
+    if(task.syncType==1):
+        role="upload_download"
+    elif(task.syncType==2):
+        role="download"
+    else:
+        role="upload"
+    try:
+        data=myS3.get_credential_demo(allow_prefix,role)
+    except Exception as e:
+        return flask.jsonify({"code": 500, "message": e, "data": {}}), 500
+    return flask.jsonify({"code": 200, "message": "success", "data": data})
+
+@app.route("/getTaskTokenByS3Dir",methods=["get"])
+@flask_login.login_required
+def getTaskTokenByS3Dir():
+    user=flask_login.current_user
+    s3Dir=flask.request.args.get("s3Dir")
+    task=SyncTask.query.filter_by(s3Dir=s3Dir,user_id=user.id).first()
+    if task==None:
+        return flask.jsonify({"code": 404, "message": "Task Not Found", "data": {}}), 404
+    allow_prefix=task.s3Dir
+    if(task.syncType==1):
+        role="upload_download"
+    elif(task.syncType==2):
+        role="download"
+    else:
+        role="upload"
+    try:
+        data=myS3.get_credential_demo(allow_prefix,role)
+    except Exception as e:
+        return flask.jsonify({"code": 500, "message": e, "data": {}}), 500
+    return flask.jsonify({"code": 200, "message": "success", "data": data})
+
+
+@app.route("/updateDevice",methods=["post"])
+@flask_login.login_required
+def updateDevice():
+    user=flask_login.current_user
+    deviceName=flask.request.form["deviceName"]
+    #import time and use standard ts
+    import datetime
+    lastOnline=datetime.datetime.now()
+    device=Device.query.filter_by(user_id=user.id,deviceName=deviceName).first()
+    if device:
+        device.lastOnline=lastOnline
+    else:
+        device=Device(deviceName=deviceName,lastOnline=lastOnline,user_id=user.id)
+        db.session.add(device)
+    db.session.commit()
+    #201
+    return flask.jsonify({"code": 201, "message": "success", "data": {}}), 201
+
+@app.route("/getDevices",methods=["get"])
+@flask_login.login_required
+def getDevices():
+    user=flask_login.current_user
+    devices=Device.query.filter_by(user_id=user.id)
+    data=[]
+    for device in devices:
+        data.append({
+            "deviceName":device.deviceName,
+            "lastOnline":device.lastOnline
+        })
+    return flask.jsonify({"code": 200, "message": "success", "data": data})
+
+@app.route("/deleteDevice",methods=["get"])
+@flask_login.login_required
+def deleteDevice():
+    user=flask_login.current_user
+    deviceName=flask.request.args.get("deviceName")
+    device=Device.query.filter_by(user_id=user.id,deviceName=deviceName).first()
+    if device:
+        db.session.delete(device)
+        db.session.commit()
+    #200
+    return flask.jsonify({"code": 200, "message": "success", "data": {}})
 
 @app.route("/logout")
+@flask_login.login_required
 def logout():
     flask_login.logout_user()
     #200
     return flask.jsonify({"code": 200, "message": "success", "data": {}})
+
+
+#全局修饰器，程序抛出异常会返回500
+@app.errorhandler(500)
+def internal_error(error):
+    #转成字符串
+    error=str(error)
+    return flask.jsonify({"code": 500, "message": error, "data": {}}), 500
 
 with app.app_context():
     db.create_all()

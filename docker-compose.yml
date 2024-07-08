@@ -14,13 +14,18 @@ services:
       retries: 5
 
   web:
-    image: ghcr.io/alexander-porter/qsyncbackend:main
+    #image: ghcr.io/alexander-porter/qsyncbackend:main
+    build: .
     ports:
       - "8099:8080"
     environment:
       SECRET_KEY: "${SECRET_KEY}"
       DB_PASSWORD: "${DB_PASSWORD}"
       DB_NAME: "${DB_NAME}"
+      S3_BUCKET: "${S3_BUCKET}"
+      S3_SECRET_ID: "${S3_SECRET_ID}"
+      S3_SECRET_KEY: "${S3_SECRET_KEY}"
+      S3_REGION: "${S3_REGION}"
     depends_on:
       mysql:
           condition: service_healthy

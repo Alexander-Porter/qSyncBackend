@@ -154,10 +154,29 @@ def register():
     email = flask.request.form["email"]
 
     password = flask.request.form["password"]
+    #如果有avatar字段
+    avatar=flask.request.form.get("avatar")
     if User.query.filter_by(email=email).first():
         #409
         return flask.jsonify({"code": 409, "message": "Email already exists", "data": {}}), 409
     user = User(username=username, email=email)
+    if avatar:
+        
+        thisUUid=uuid.uuid1()
+        uuidStr=str(thisUUid)
+        fileType=avatar.split(";")[0].split("/")[1]
+        with open(f"{uuidStr}.{fileType}", "wb") as f:
+            import base64
+            avatar=avatar.split(",")[1]
+            avatar=avatar.replace(" ","+")
+            avatar = base64.b64decode(avatar)
+            f.write(avatar)
+        if not fileType in ["png","gif","jpeg"]:
+            return flask.jsonify({"code": 403, "message": "Bad Avatar File Type", "data": {}}), 403
+        myS3.uploadObject(f"avatars/{uuidStr}.{fileType}",f"{uuidStr}.{fileType}")
+        user.avatar_url=f"avatars/{uuidStr}.{fileType}"
+        import os
+        os.remove(f"{uuidStr}.{fileType}")
     user.set_password(password)
     db.session.add(user)
     db.session.commit()
@@ -252,7 +271,7 @@ def getTaskToken():
     task=SyncTask.query.filter_by(id=task_id).first()
     if task.user_id!=user.id:
         return flask.jsonify({"code": 403, "message": "Permission Denied", "data": {}}), 403
-    allow_prefix=task.s3Dir
+    allow_prefix=[task.s3Dir,task.s3Dir+"*"]
     if(task.syncType==1):
         role="upload_download"
     elif(task.syncType==2):
@@ -272,8 +291,8 @@ def getTaskTokenByS3Dir():
     s3Dir=flask.request.args.get("s3Dir")
     task=SyncTask.query.filter_by(s3Dir=s3Dir,user_id=user.id).first()
     if task==None:
-        return flask.jsonify({"code": 404, "message": "Task Not Found", "data": {}}), 404
-    allow_prefix=task.s3Dir
+        return flask.jsonify({"code": 404, "message": f"Task {s3Dir} Not Found", "data": {}}), 404
+    allow_prefix=[task.s3Dir,task.s3Dir+"*"]
     if(task.syncType==1):
         role="upload_download"
     elif(task.syncType==2):

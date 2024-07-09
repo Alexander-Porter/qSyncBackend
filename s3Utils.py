@@ -27,6 +27,7 @@ class S3Utils:
                 'name/cos:ListParts',
                 'name/cos:UploadPart',
                 'name/cos:CompleteMultipartUpload',
+                'name/cos:PutObjectCopy',
                 'name/cos:HeadBucket'
             ]
         elif role == 'download':
@@ -40,6 +41,7 @@ class S3Utils:
                 'name/cos:HeadBucket',
                 'name/cos:DeleteObject',
                 'name/cos:PutObject',
+                'name/cos:PutObjectCopy',
                 'name/cos:PostObject',
                 'name/cos:InitiateMultipartUpload',
                 'name/cos:ListMultipartUploads',

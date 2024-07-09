@@ -125,20 +125,23 @@ def updateInfo():
 def updateAvatar():
     #base64 encoded image
     user=flask_login.current_user
-    avatar = flask.request.form["avatar"]
-    #save base64 encoded image to file
-    thisUUid=uuid.uuid1()
-    uuidStr=str(thisUUid)
-    with open(f"{uuidStr}.png", "wb") as f:
-        import base64
-        avatar=avatar.split(",")[1]
-        avatar = base64.b64decode(avatar)
-        f.write(avatar)
-    myS3.uploadObject(f"avatars/{uuidStr}.png",f"{uuidStr}.png")
-    user.avatar_url=f"avatars/{uuidStr}.png"
-    #删除
-    import os
-    os.remove(f"{uuidStr}.png")
+    avatar=flask.request.form.get("avatar")
+    if avatar:
+        thisUUid=uuid.uuid1()
+        uuidStr=str(thisUUid)
+        fileType=avatar.split(";")[0].split("/")[1]
+        with open(f"{uuidStr}.{fileType}", "wb") as f:
+            import base64
+            avatar=avatar.split(",")[1]
+            avatar=avatar.replace(" ","+")
+            avatar = base64.b64decode(avatar)
+            f.write(avatar)
+        if not fileType in ["png","gif","jpeg"]:
+            return flask.jsonify({"code": 403, "message": "Bad Avatar File Type", "data": {}}), 403
+        myS3.uploadObject(f"avatars/{uuidStr}.{fileType}",f"{uuidStr}.{fileType}")
+        user.avatar_url=f"avatars/{uuidStr}.{fileType}"
+        import os
+        os.remove(f"{uuidStr}.{fileType}")
     db.session.commit()
     avatarUrl=myS3.getPreSignUrl(user.avatar_url)
     data={

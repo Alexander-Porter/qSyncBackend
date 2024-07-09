@@ -99,7 +99,10 @@ def login():
 @flask_login.login_required
 def profile():
     user=flask_login.current_user
-    avatarUrl=myS3.getPreSignUrl(user.avatar_url)
+    if(user.avatar_url==None):
+        avatarUrl=None
+    else:
+        avatarUrl=myS3.getPreSignUrl(user.avatar_url)
     data={
         "username":user.username,
         "email":user.email,
@@ -143,7 +146,10 @@ def updateAvatar():
         import os
         os.remove(f"{uuidStr}.{fileType}")
     db.session.commit()
-    avatarUrl=myS3.getPreSignUrl(user.avatar_url)
+    if user.avatar_url==None:
+        avatarUrl=None
+    else:
+        avatarUrl=myS3.getPreSignUrl(user.avatar_url)
     data={
         "avatar_url":avatarUrl
     }

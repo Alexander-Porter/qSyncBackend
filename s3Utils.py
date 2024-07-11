@@ -8,11 +8,13 @@ from qcloud_cos import CosS3Client
 import re
 
 class S3Utils:
-    def __init__(self, secret_id, secret_key, bucket, region):
+    def __init__(self, secret_id, secret_key, bucket,appid,region):
         self.secret_id = secret_id
         self.secret_key = secret_key
         self.bucket = bucket
+        self.appid = appid
         self.region = region
+        self.newBucket = bucket + '-' + appid
         config = CosConfig(Region=region, SecretId=secret_id, SecretKey=secret_key)
         self.client = CosS3Client(config)
 
@@ -68,7 +70,7 @@ class S3Utils:
             'secret_id': self.secret_id,  
             'secret_key': self.secret_key,
 
-            'bucket': self.bucket, 
+            'bucket':  self.newBucket, 
             'region': self.region,
             # 这里改成允许的路径前缀，可以根据自己网站的用户登录态判断允许上传的具体路径
             # 例子： a.jpg 或者 a/* 或者 * (使用通配符*存在重大安全风险, 请谨慎评估使用)
@@ -118,7 +120,7 @@ class S3Utils:
     
     def createDir(self, key):
         response = self.client.put_object(
-            Bucket=self.bucket,
+            Bucket=self.newBucket,
             Body='',
             Key=key
         )
@@ -126,7 +128,7 @@ class S3Utils:
 
     def uploadObject(self, key, file):
         response = self.client.upload_file(
-            Bucket=self.bucket,
+            Bucket= self.newBucket,
             Key=key,
             LocalFilePath=file
         )
@@ -134,13 +136,13 @@ class S3Utils:
 
     def getObjectUrl(self, key):
         response = self.client.get_object_url(
-            Bucket=self.bucket,
+            Bucket= self.newBucket,
             Key=key
         )
         return response
     def getPreSignUrl(self, key):
         response = self.client.get_presigned_download_url(
-            Bucket=self.bucket,
+            Bucket= self.newBucket,
             Key=key,
         )
         return response

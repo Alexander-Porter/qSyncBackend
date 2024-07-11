@@ -25,7 +25,7 @@ if db_user==None:
 app.config['SQLALCHEMY_DATABASE_URI'] = f"mysql+mysqlconnector://{db_user}:{db_password}@{db_host}/{db_name}"
 logger = logging.getLogger(__name__)  # Add this line to define the logger object
 
-myS3=S3Utils(os.getenv("S3_SECRET_ID"), os.getenv("S3_SECRET_KEY"), os.getenv("S3_BUCKET"), os.getenv("S3_REGION"))
+myS3=S3Utils(os.getenv("S3_SECRET_ID"), os.getenv("S3_SECRET_KEY"), os.getenv("S3_BUCKET"),os.getenv("S3_APPID"), os.getenv("S3_REGION"))
 
 
 
@@ -371,6 +371,15 @@ def logout():
     #200
     return flask.jsonify({"code": 200, "message": "success", "data": {}})
 
+@app.route("/s3Config",methods=["get"])
+@flask_login.login_required
+def s3Config():
+    data={
+        "bucket":os.getenv("S3_BUCKET"),
+        "region":os.getenv("S3_REGION"),
+        "appid":os.getenv("S3_APPID")
+    }
+    return flask.jsonify({"code": 200, "message": "success", "data": data})
 
 #全局修饰器，程序抛出异常会返回500
 @app.errorhandler(500)

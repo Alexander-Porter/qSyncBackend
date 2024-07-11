@@ -46,6 +46,7 @@ class User(db.Model):
     tasks = db.relationship('SyncTask', backref='user', lazy=True)
     devices = db.relationship('Device', backref='user', lazy=True)
     is_active = db.Column(db.Boolean, default=True)
+    __table_args__ = { 'mysql_charset' : 'utf8mb4'}
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
     def check_password(self, password):
@@ -60,6 +61,7 @@ class Device(db.Model):
     deviceName = db.Column(db.String(100), nullable=False)
     lastOnline = db.Column(db.DateTime, nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    __table_args__ = { 'mysql_charset' : 'utf8mb4'}
 
 class SyncTask(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -71,6 +73,7 @@ class SyncTask(db.Model):
     totalSize = db.Column(db.BigInteger, nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     created_at = db.Column(db.DateTime, nullable=False)
+    __table_args__ = { 'mysql_charset' : 'utf8mb4'}
 
 @login_manager.user_loader
 def user_loader(id):
@@ -241,6 +244,9 @@ def addTask():
             myS3.createDir(s3Dir)
         except Exception as e:
             return flask.jsonify({"code": 500, "message": e, "data": {}}), 500
+    mySameTask=SyncTask.query.filter_by(localDir=localDir, s3Dir=s3Dir, user_id=user.id).first()
+    if mySameTask:
+        return flask.jsonify({"code": 201, "message": "Same Task Already Exists", "data": {}}), 201
     created_at = datetime.datetime.now()
     task = SyncTask(localDir=localDir, s3Dir=s3Dir, syncType=syncType, usedSize=usedSize, totalSize=totalSize, user_id=user.id, created_at=created_at)
     db.session.add(task)
@@ -284,9 +290,9 @@ def getTaskToken():
     if(task.syncType==1):
         role="upload_download"
     elif(task.syncType==2):
-        role="download"
-    else:
         role="upload"
+    else:
+        role="download"
     try:
         data=myS3.get_credential_demo(allow_prefix,role)
     except Exception as e:

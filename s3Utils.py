@@ -22,11 +22,13 @@ class S3Utils:
             actions = [
                 'name/cos:PutObject',
                 'name/cos:PostObject',
+                'name/cos:HeadObject',
                 'name/cos:InitiateMultipartUpload',
                 'name/cos:ListMultipartUploads',
                 'name/cos:ListParts',
                 'name/cos:UploadPart',
                 'name/cos:CompleteMultipartUpload',
+                'name/cos:AbortMultipartUpload',
                 'name/cos:PutObjectCopy',
                 'name/cos:HeadBucket'
             ]
@@ -34,6 +36,8 @@ class S3Utils:
             actions = [
                 'name/cos:GetBucket',
                 'name/cos:HeadBucket'
+                'name/cos:HeadObject',
+                'name/cos:GetObject',
             ]
         elif role == 'upload_download':
             actions = [
@@ -41,7 +45,9 @@ class S3Utils:
                 'name/cos:HeadBucket',
                 'name/cos:DeleteObject',
                 'name/cos:PutObject',
+                'name/cos:GetObject',
                 'name/cos:PutObjectCopy',
+                'name/cos:HeadObject',
                 'name/cos:PostObject',
                 'name/cos:InitiateMultipartUpload',
                 'name/cos:ListMultipartUploads',

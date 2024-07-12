@@ -172,8 +172,11 @@ def register():
         #409
         return flask.jsonify({"code": 409, "message": "Email already exists", "data": {}}), 409
     user = User(username=username, email=email)
+    #md5 email
+    import hashlib
+    hashed_email=hashlib.md5(email.encode()).hexdigest()
+    myS3.createDir(f"{hashed_email}/")
     if avatar:
-        
         thisUUid=uuid.uuid1()
         uuidStr=str(thisUUid)
         fileType=avatar.split(";")[0].split("/")[1]
@@ -231,17 +234,15 @@ def addTask():
     syncType=flask.request.form["syncType"]
     usedSize=flask.request.form["usedSize"]
     totalSize=flask.request.form["totalSize"]
-    #判断数据库中S3目录是否被其他用户拥有过
-    tasks = SyncTask.query.filter(SyncTask.s3Dir == s3Dir, SyncTask.user_id != user.id).all()
-    if tasks:
-        # dir is already occupied by other users
-        return flask.jsonify({"code": 409, "message": "Directory already occupied", "data": {}}), 409
     #否则，检查S3目录是否存在
-    if not myS3.isValidDir(s3Dir):
+    import hashlib
+    hashed_email=hashlib.md5(user.email.encode()).hexdigest()
+    realS3Dir=f"{hashed_email}/{s3Dir}"
+    if not myS3.isValidDir(realS3Dir):
         return flask.jsonify({"code": 403, "message": "Bad S3 Dir Name", "data": {}}), 403
-    if not myS3.isObjectExist(s3Dir):
+    if not myS3.isObjectExist(realS3Dir):
         try:
-            myS3.createDir(s3Dir)
+            myS3.createDir(realS3Dir)
         except Exception as e:
             return flask.jsonify({"code": 500, "message": e, "data": {}}), 500
     mySameTask=SyncTask.query.filter_by(localDir=localDir, s3Dir=s3Dir, user_id=user.id).first()
@@ -286,7 +287,10 @@ def getTaskToken():
     task=SyncTask.query.filter_by(id=task_id).first()
     if task.user_id!=user.id:
         return flask.jsonify({"code": 403, "message": "Permission Denied", "data": {}}), 403
-    allow_prefix=[task.s3Dir,task.s3Dir+"*"]
+    import hashlib
+    hashed_email=hashlib.md5(user.email.encode()).hexdigest()
+    realS3Dir=f"{hashed_email}/{task.s3Dir}"
+    allow_prefix=[realS3Dir,realS3Dir+"*"]
     if(task.syncType==1):
         role="upload_download"
     elif(task.syncType==2):
@@ -299,27 +303,20 @@ def getTaskToken():
         return flask.jsonify({"code": 500, "message": e, "data": {}}), 500
     return flask.jsonify({"code": 200, "message": "success", "data": data})
 
-@app.route("/getTaskTokenByS3Dir",methods=["get"])
+
+
+@app.route("/getTaskUnifiedToken",methods=["get"])
 @flask_login.login_required
-def getTaskTokenByS3Dir():
+def getTaskUnifiedToken():
     user=flask_login.current_user
-    s3Dir=flask.request.args.get("s3Dir")
-    task=SyncTask.query.filter_by(s3Dir=s3Dir,user_id=user.id).first()
-    if task==None:
-        return flask.jsonify({"code": 404, "message": f"Task {s3Dir} Not Found", "data": {}}), 404
-    allow_prefix=[task.s3Dir,task.s3Dir+"*"]
-    if(task.syncType==1):
-        role="upload_download"
-    elif(task.syncType==2):
-        role="download"
-    else:
-        role="upload"
+    import hashlib
+    hashed_email=hashlib.md5(user.email.encode()).hexdigest()
+    realS3Dir=f"{hashed_email}/"
     try:
-        data=myS3.get_credential_demo(allow_prefix,role)
+        data=myS3.getUnifyToken([],[],[realS3Dir+"*"])
+        return flask.jsonify({"code": 200, "message": "success", "data": data})
     except Exception as e:
         return flask.jsonify({"code": 500, "message": e, "data": {}}), 500
-    return flask.jsonify({"code": 200, "message": "success", "data": data})
-
 
 @app.route("/updateDevice",methods=["post"])
 @flask_login.login_required
@@ -374,10 +371,14 @@ def logout():
 @app.route("/s3Config",methods=["get"])
 @flask_login.login_required
 def s3Config():
+    user=flask_login.current_user
+    import hashlib
+    hashed_email=hashlib.md5(user.email.encode()).hexdigest()
     data={
         "bucket":os.getenv("S3_BUCKET"),
         "region":os.getenv("S3_REGION"),
-        "appid":os.getenv("S3_APPID")
+        "appid":os.getenv("S3_APPID"),
+        "allowPrefix":f"{hashed_email}/"
     }
     return flask.jsonify({"code": 200, "message": "success", "data": data})
 

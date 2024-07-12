@@ -2,7 +2,7 @@
 import json
 import os
 
-from sts.sts import Sts
+from sts.sts import Sts,Scope
 from qcloud_cos import CosConfig
 from qcloud_cos import CosS3Client
 import re
@@ -24,6 +24,7 @@ class S3Utils:
             actions = [
                 'name/cos:PutObject',
                 'name/cos:PostObject',
+                'name/cos:HeadBucket',
                 'name/cos:HeadObject',
                 'name/cos:InitiateMultipartUpload',
                 'name/cos:ListMultipartUploads',
@@ -32,7 +33,6 @@ class S3Utils:
                 'name/cos:CompleteMultipartUpload',
                 'name/cos:AbortMultipartUpload',
                 'name/cos:PutObjectCopy',
-                'name/cos:HeadBucket'
             ]
         elif role == 'download':
             actions = [
@@ -145,4 +145,38 @@ class S3Utils:
             Bucket= self.newBucket,
             Key=key,
         )
+        return response
+    
+    def getUnifyToken(self,downloadList,uploadList,downUpList):
+        scopes = list()
+        print(downloadList,uploadList,downUpList)
+        for item in downloadList:
+            for action in self.get_actions_list('download'):
+                scopes.append(Scope(action, self.newBucket, self.region, item))
+        for item in uploadList:
+            for action in self.get_actions_list('upload'):
+                scopes.append(Scope(action, self.newBucket, self.region, item))
+        for item in downUpList:
+            for action in self.get_actions_list('upload_download'):
+                scopes.append(Scope(action, self.newBucket, self.region, item))
+        config = {
+            'sts_scheme': 'https',
+            'sts_url': 'sts.tencentcloudapi.com/',
+            # 临时密钥有效时长，单位是秒
+            'duration_seconds': 1800,
+            'secret_id': self.secret_id,
+            # 固定密钥
+            'secret_key': self.secret_key,
+            # 换成 bucket 所在地区
+            'region': self.region,
+            #  设置网络代理
+            # 'proxy': {
+            #     'http': 'xxx',
+            #     'https': 'xxx'
+            # },
+            'policy': Sts.get_policy(scopes)
+        }
+
+        sts = Sts(config)
+        response = sts.get_credential()
         return response

@@ -55,7 +55,8 @@ class S3Utils:
                 'name/cos:ListMultipartUploads',
                 'name/cos:ListParts',
                 'name/cos:UploadPart',
-                'name/cos:CompleteMultipartUpload'
+                'name/cos:CompleteMultipartUpload',
+                'name/cos:GetBucketObjectVersions'
             ]
         else:
             actions = []

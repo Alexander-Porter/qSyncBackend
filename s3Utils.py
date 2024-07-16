@@ -67,7 +67,7 @@ class S3Utils:
             'url': 'https://sts.tencentcloudapi.com/',
             'domain': 'sts.tencentcloudapi.com', 
             # 临时密钥有效时长，单位是秒
-            'duration_seconds': 1800,
+            'duration_seconds': 60*60*12,
             'secret_id': self.secret_id,  
             'secret_key': self.secret_key,
 
@@ -164,7 +164,7 @@ class S3Utils:
             'sts_scheme': 'https',
             'sts_url': 'sts.tencentcloudapi.com/',
             # 临时密钥有效时长，单位是秒
-            'duration_seconds': 1800,
+            'duration_seconds': 60*60*12,
             'secret_id': self.secret_id,
             # 固定密钥
             'secret_key': self.secret_key,

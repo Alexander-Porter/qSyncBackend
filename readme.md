@@ -1,5 +1,5 @@
 # QSyncBackend
-QSyncBackend is a simple backend written in Python for syncing files between two directories. It is designed to be used with QSyncUi.
+QSyncBackend is a simple backend written in Python for syncing files between two directories. It is designed to be used with [QSyncUi](https://github.com/LawPlusThree/QSyncUi).
 
 ## Run from source
 1. Clone the repository
